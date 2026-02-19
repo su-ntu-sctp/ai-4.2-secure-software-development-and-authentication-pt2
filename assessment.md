@@ -1,68 +1,106 @@
 # Assessment / Quiz
 
-## Overview
-- **Lesson:** [title / module.lesson]
-- **Format:** 10 questions (mix MCQ / True–False / Short Answer)
-- **Time:** ~10–15 minutes
-- **Scoring:** 1 point each (unless stated)
-
 ## Questions
 
-### Q1 (MCQ)
-[Question?]  
-A. [ ]  
-B. [ ]  
-C. [ ]  
-D. [ ]  
-**Answer:** [A/B/C/D] — [1-line reason]
+### Q1 (True/False)
 
-### Q2 (MCQ)
-[Question?]  
-A. [ ]  
-B. [ ]  
-C. [ ]  
-D. [ ]  
-**Answer:** [A/B/C/D] — [1-line reason]
+Q1: JWT allows REST APIs to remain stateless because the server does not need to store session information?
 
-### Q3 (True/False)
-[Statement]  
-**Answer:** [True/False] — [1-line reason]
+A - True
 
-### Q4 (True/False)
-[Statement]  
-**Answer:** [True/False] — [1-line reason]
+B - False
 
-### Q5 (Short Answer)
-[Prompt]  
-**Expected:** [1–2 key points]
+---
 
-### Q6 (Short Answer)
-[Prompt]  
-**Expected:** [1–2 key points]
+Q2: What does JWT stand for?
 
-### Q7 (MCQ)
-[Question?]  
-A. [ ]  
-B. [ ]  
-C. [ ]  
-D. [ ]  
-**Answer:** [A/B/C/D] — [1-line reason]
+A - Java Web Token
 
-### Q8 (MCQ)
-[Question?]  
-A. [ ]  
-B. [ ]  
-C. [ ]  
-D. [ ]  
-**Answer:** [A/B/C/D] — [1-line reason]
+B - JSON Web Token
 
-### Q9 (True/False)
-[Statement]  
-**Answer:** [True/False] — [1-line reason]
+C - JavaScript Web Token
 
-### Q10 (Short Answer)
-[Prompt]  
-**Expected:** [1–2 key points]
+D - Java Web Transfer
+
+---
+
+Q3: A JWT consists of three parts separated by dots: header, payload, and signature?
+
+A - True
+
+B - False
+
+---
+
+Q4: In JWT authentication, what header is used to send the token to the server?
+
+A - Token
+
+B - Bearer
+
+C - Authorization
+
+D - Authentication
+
+---
+
+Q5: What is the purpose of the JWT signature?
+
+A - To encrypt the token
+
+B - To ensure the token has not been tampered with
+
+C - To compress the token
+
+D - To format the token
+
+---
+
+Q6: In Spring Security with JWT, the session policy should be set to STATELESS?
+
+A - True
+
+B - False
+
+---
+
+Q7: Which class is responsible for generating and validating JWT tokens in the lesson?
+
+A - JwtController
+
+B - JwtService
+
+C - TokenService
+
+D - AuthService
+
+---
+
+Q8: The JWT authentication filter runs before the request reaches the controller?
+
+A - True
+
+B - False
+
+---
+
+Q9: What HTTP status code is returned when accessing a protected endpoint without a valid JWT token?
+
+A - 400 Bad Request
+
+B - 401 Unauthorized
+
+C - 403 Forbidden
+
+D - 404 Not Found
+
+---
+
+Q10: The login endpoint (/auth/login) should be publicly accessible (permitAll) in the security configuration?
+
+A - True
+
+B - False
 
 ## Notes
 - Keep each question atomic and aligned to the lesson objectives.
