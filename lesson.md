@@ -1,5 +1,5 @@
-# Module 4 – Lesson 4.2  
-# Spring Security Part 2: JWT Authentication & Authorization 
+# Module 4 – Lesson 4.2
+# Spring Security Part 2: JWT Authentication & Authorization
 
 ---
 
@@ -9,29 +9,14 @@ In this lesson, you will implement **JWT (JSON Web Token)** authentication in a 
 
 ---
 
-## Lesson Duration & Timing Breakdown
-
-This lesson is designed for a **3-hour instructor-led session**. The breakdown below helps both instructors and students understand the expected pace.
-
-- Warm-up & recap of previous lesson: ~10 minutes  
-- JWT concepts and mental model: ~35 minutes  
-- Standalone JWT example (code + explanation): ~55 minutes  
-- Short break / buffer: ~10 minutes  
-- JWT filter and security configuration deep explanation: ~35 minutes  
-- Applying JWT to Simple CRM: ~30 minutes  
-- Hands-on activities: ~20 minutes  
-- Wrap-up and Q&A: ~15 minutes  
-
----
-
 ## Lesson Objectives
 
 By the end of this lesson, learners will be able to:
 
-1. **Explain** how JWT supports stateless authentication in REST APIs  
-2. **Implement** JWT token generation and validation in Spring Security  
-3. **Secure** one or two REST endpoints using JWT and call them from Postman  
-4. **Apply** the same JWT flow to simple endpoints in the Simple CRM project  
+1. **Explain** how JWT supports stateless authentication in REST APIs
+2. **Implement** JWT token generation and validation in Spring Security
+3. **Secure** one or two REST endpoints using JWT and call them from Postman
+4. **Apply** the same JWT flow to simple endpoints in the Simple CRM project
 
 ---
 
@@ -49,7 +34,7 @@ Basic authentication is useful for learning because it is simple, but it is not 
 
 ## Part 2: Stateless Authentication Mental Model (Session vs JWT)
 
-In session-based authentication, the server “remembers” the user by storing session state after login. The client only needs to send a session identifier, and the server uses it to retrieve the session from memory or a session store. In JWT-based authentication, the server does not store a session. Instead, the server issues a token that contains user identity information (claims) and a signature. On every request, the server validates the token signature and expiry; if valid, the server treats the user as authenticated.
+In session-based authentication, the server "remembers" the user by storing session state after login. The client only needs to send a session identifier, and the server uses it to retrieve the session from memory or a session store. In JWT-based authentication, the server does not store a session. Instead, the server issues a token that contains user identity information (claims) and a signature. On every request, the server validates the token signature and expiry; if valid, the server treats the user as authenticated.
 
 ---
 
@@ -69,10 +54,10 @@ The **header** usually contains metadata such as the signing algorithm. The **pa
 
 In this lesson, you will implement the following flow, step by step.
 
-1. Create an authentication endpoint that accepts a username and password.  
-2. If credentials are valid, generate a JWT token and return it in the response.  
-3. For protected endpoints, require an `Authorization: Bearer <token>` header.  
-4. Add a JWT filter that runs before your controller, reads the token, validates it, and sets the authenticated user in Spring Security’s context.  
+1. Create an authentication endpoint that accepts a username and password.
+2. If credentials are valid, generate a JWT token and return it in the response.
+3. For protected endpoints, require an `Authorization: Bearer <token>` header.
+4. Add a JWT filter that runs before your controller, reads the token, validates it, and sets the authenticated user in Spring Security's context.
 5. Test everything in Postman so you can clearly see the difference between requests with and without tokens.
 
 ---
@@ -81,15 +66,15 @@ In this lesson, you will implement the following flow, step by step.
 
 We will start with a small, standalone example because it helps you learn the JWT flow without dealing with CRM code and database logic at the same time. Once you understand the flow, applying it to `simple-crm` becomes much easier.
 
-### Step 1: Create a New Simple Spring Boot Project (or a New Package in an Existing Sandbox)
+### Step 1: Create a New Simple Spring Boot Project
 
-If you prefer, you can do this in a fresh project named `jwt-demo`. If you want fewer projects, you may also add the following classes into your existing workspace under a separate package like `com.example.jwtdemo`. The key is that the example must stay simple.
+Create a fresh project named `jwt-demo` using Spring Initializr with Spring Web and Spring Security dependencies. Alternatively, you may add the following classes into your existing workspace under a separate package like `com.example.jwtdemo` — the key is that the example stays simple and isolated.
 
 ### Step 2: Add Dependencies
 
-Add Spring Security and Web (if not already present). Then add a JWT library.
+Add the JWT library dependencies to `pom.xml`.
 
-In `pom.xml`, include:
+> ⚠️ **Note:** We are using `jjwt` version `0.11.5` intentionally in this lesson because its API is clear and beginner-friendly. Version `0.12.x` introduced significant API changes (e.g. `Jwts.parser()` instead of `Jwts.parserBuilder()`, `.subject()` instead of `.setSubject()`). If you look up newer tutorials online, you may see different syntax — this is why.
 
 ```xml
 <dependency>
@@ -123,7 +108,9 @@ In `pom.xml`, include:
 
 ### Step 3: Add JWT Settings in `application.properties`
 
-Add a secret key and expiry time. For training, we store it in `application.properties`. In real projects, secrets should be stored securely (environment variables, vault, etc.), but we keep it simple here.
+Add a secret key and expiry time.
+
+> ⚠️ **Note:** The JWT secret must be **at least 32 characters long**. If you use a shorter value (like `mysecret`), you will get a `WeakKeyException` at runtime. For training, we store it in `application.properties`. In real projects, secrets should be stored securely using environment variables or a secrets manager.
 
 ```properties
 jwt.secret=replace-this-with-a-long-random-secret-key-for-training-only
@@ -168,7 +155,9 @@ public class TokenResponse {
 
 ### Step 5: Create a `JwtService` to Generate and Validate Tokens
 
-This class is responsible for creating and validating JWTs. Notice that we are adding the username as the token’s subject and adding an expiration timestamp.
+This class is responsible for creating and validating JWTs. Notice that we are adding the username as the token's subject and adding an expiration timestamp.
+
+> ⚠️ **Note:** You may see a deprecation warning on `SignatureAlgorithm.HS256` when using `jjwt 0.11.5`. This is expected and harmless — the code still works correctly. The warning exists because `0.12.x` replaced this with a different API.
 
 ```java
 import io.jsonwebtoken.Claims;
@@ -192,8 +181,8 @@ public class JwtService {
     private long jwtExpirationMs;
 
     private Key getSigningKey() {
-        // IMPORTANT: For HS256, we use a shared secret key.
-        // The secret must be long enough for the algorithm.
+        // For HS256, we use a shared secret key.
+        // The secret must be at least 32 characters long.
         return Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
     }
 
@@ -238,7 +227,7 @@ public class JwtService {
 
 ### Step 6: Create a Simple Auth Controller That Issues Tokens
 
-This endpoint will accept credentials and return a token. For the standalone demo, we will keep user validation very simple with in-memory checking. The goal is not user storage yet; the goal is to understand the JWT flow.
+This endpoint will accept credentials and return a token. For the standalone demo, we keep user validation simple with in-memory checking. The goal here is to understand the JWT flow, not user storage.
 
 ```java
 import org.springframework.http.HttpStatus;
@@ -258,8 +247,8 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<TokenResponse> login(@RequestBody LoginRequest request) {
 
-        // TRAINING-ONLY: Very simple credential check.
-        // In real applications, you validate against a database or identity provider.
+        // TRAINING ONLY: Simple in-memory credential check.
+        // In real applications, validate against a database or identity provider.
         if ("user".equals(request.getUsername()) && "password".equals(request.getPassword())) {
             String token = jwtService.generateToken(request.getUsername());
             return new ResponseEntity<>(new TokenResponse(token), HttpStatus.OK);
@@ -271,17 +260,14 @@ public class AuthController {
 }
 ```
 
-### Step 7: Create a Simple Protected Endpoint (Hello Endpoint)
+### Step 7: Create a Simple Protected Endpoint
 
-This endpoint will be protected by JWT. Once JWT security is working, calling this endpoint without a token should result in `401 Unauthorized`, and calling it with a valid token should return `200 OK`.
+This endpoint will be protected by JWT. Once JWT security is working, calling it without a token should return `401 Unauthorized`, and calling it with a valid token should return `200 OK`.
 
-It is important to notice that the controller itself does not contain “JWT code” or any special annotations that say “secure this endpoint”. In Spring Security, endpoints are protected by the **security configuration** and the **security filter chain**. When we later configure Spring Security to require authentication for routes under `/api/**`, Spring Security will block requests to `/api/hello` unless a valid JWT has already been validated by our JWT filter.
+It is important to notice that the controller itself does not contain any JWT code. In Spring Security, endpoints are protected by the **security configuration** and the **filter chain** — not by annotations on the controller. So even though this looks like a normal controller, it becomes protected because:
+1. The request passes through the JWT filter first, and
+2. The `SecurityConfig` marks `/api/**` as authenticated.
 
-So, even though this controller looks like a normal Spring controller, it becomes protected because:
-1) the request passes through the JWT filter first, and  
-2) the `SecurityConfig` rules mark `/api/**` as authenticated.
-
-Now create the controller exactly as shown below.
 ```java
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -296,40 +282,18 @@ public class HelloController {
 }
 ```
 
-### Step 8: Create a JWT Authentication Filter
+### Step 8: Create the JWT Authentication Filter
 
-This filter will run for incoming requests, and this is where JWT starts to feel “real” because we are now intercepting requests before they reach the controller. Many students find this part overwhelming at first, so read it slowly and focus on the purpose rather than memorising every line.
+This filter intercepts incoming requests and validates the JWT before the request reaches the controller. Many students find this part overwhelming at first — focus on the **purpose** rather than memorising every line. It is also perfectly acceptable to copy and paste this filter code; it is standard boilerplate used across real Spring Boot applications.
 
-Think of the JWT filter as a “security gatekeeper” that checks each request for a token.
+**Mental model of what the filter does:**
 
-Here is the step-by-step mental model of what the filter does:
+1. Look for the `Authorization` header in the format `Bearer <token>`
+2. If missing, pass the request along — Spring Security will decide later if the route needs authentication
+3. If present, extract and validate the token (signature + expiry)
+4. If valid, extract the username and set an authenticated user in Spring Security's `SecurityContext`
+5. The controller then receives a request that Spring Security already considers authenticated
 
-1. **Look for the `Authorization` header.**  
-   Spring Security does not magically know your token. The client must send it. The standard place is the request header:  
-   `Authorization: Bearer <token>`
-
-2. **If the header is missing (or does not start with `Bearer `), do not stop the request here.**  
-   The filter simply continues the chain. Later, Spring Security will decide whether that route is allowed without authentication. For protected routes, Spring Security will eventually return `401 Unauthorized` because the request is not authenticated.
-
-3. **If the Bearer token exists, extract the token string.**  
-   We remove the `Bearer ` prefix and keep only the JWT text.
-
-4. **Validate the token.**  
-   Validation means checking that:
-   - the token signature is correct (token was not modified), and
-   - the token is not expired.
-
-5. **If the token is valid, extract the username from it.**  
-   We stored the username as the JWT “subject” when generating the token.
-
-6. **Create an `Authentication` object and store it in Spring Security’s `SecurityContext`.**  
-   This is the most important part. Once the `SecurityContext` contains an authenticated user, Spring Security treats the request as authenticated for the rest of the request lifecycle.
-
-After this, the controller does not need to know anything about JWT. It just receives a normal request that Spring Security already considers authenticated.
-
-If this section feels overwhelming, it is completely okay to **copy and paste this filter code**. This filter pattern is standard boilerplate for JWT setup in Spring Security, and understanding it fully often comes gradually with practice.
-
-Now add the filter exactly as shown below.
 ```java
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -365,7 +329,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
 
         // If there's no Authorization header, continue the chain.
-        // The SecurityConfig will decide whether the route is permitted or requires authentication.
+        // SecurityConfig will decide whether the route requires authentication.
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             filterChain.doFilter(request, response);
             return;
@@ -377,8 +341,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         if (jwtService.isTokenValid(token)) {
             String username = jwtService.extractUsername(token);
 
-            // TRAINING-ONLY: We are not loading roles/authorities from DB in this demo.
-            // We'll set an authenticated user with empty authorities to keep the flow simple.
+            // TRAINING ONLY: Empty authorities — keeping the flow simple for learning.
+            // In real applications, you would load roles/authorities from the database.
             UsernamePasswordAuthenticationToken authentication =
                     new UsernamePasswordAuthenticationToken(username, null, Collections.emptyList());
 
@@ -395,21 +359,14 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
 ### Step 9: Configure Spring Security to Use the JWT Filter
 
-Now we create a `SecurityConfig` that tells Spring Security two big things: **which endpoints are public**, and **which endpoints require authentication**. This is also the place where we connect our JWT filter into Spring Security’s filter chain.
+This configuration tells Spring Security which endpoints are public, which require authentication, and connects the JWT filter into the chain. It is also perfectly acceptable to copy and paste this configuration — it is a standard JWT setup pattern.
 
-Read this carefully as a simple set of rules:
+Key rules applied here:
+- `/auth/login` is public — users must be able to log in before they have a token
+- `/api/**` requires authentication — all routes under `/api/` are protected
+- `SessionCreationPolicy.STATELESS` — no server-side sessions; every request must carry the token
+- JWT filter runs **before** `UsernamePasswordAuthenticationFilter` so authentication is resolved early
 
-First, we allow unauthenticated access to `/auth/login`. This is necessary because users must be able to log in and get a token before they can access anything protected.
-
-Next, we require authentication for `/api/**`. This means every route starting with `/api/` becomes protected. So `/api/hello` is protected because it matches `/api/**`. If a request comes in without a valid token, Spring Security will block it.
-
-We also set the session policy to `STATELESS`. This is crucial for JWT. It tells Spring Security: “Do not store user sessions on the server.” Every request must prove authentication using the token.
-
-Finally, we add our JWT filter **before** `UsernamePasswordAuthenticationFilter`. This ordering matters because we want Spring Security to check JWT tokens early, so that by the time authorization rules run, the user is already authenticated (if the token is valid).
-
-If this configuration feels complex, it is perfectly okay to **copy and paste this code**. This is a very common JWT configuration pattern used across real Spring Boot applications.
-
-Now create the configuration exactly as shown below.
 ```java
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -433,10 +390,10 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 
         http
-            // REST APIs typically disable CSRF when using stateless auth mechanisms like JWT
+            // REST APIs disable CSRF when using stateless auth like JWT
             .csrf(csrf -> csrf.disable())
 
-            // Make the application stateless: Spring Security will not create or use sessions
+            // Stateless: Spring Security will not create or use sessions
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
             // Define which routes are public vs protected
@@ -446,7 +403,7 @@ public class SecurityConfig {
                 .anyRequest().permitAll()
             )
 
-            // Register our JWT filter so it runs before username/password authentication
+            // Register JWT filter to run before username/password authentication
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
@@ -456,17 +413,14 @@ public class SecurityConfig {
 
 ---
 
-## Part 6A: Step-by-Step Postman Testing for the Standalone Example
-
-The goal here is to make the flow extremely clear. You will first get a token, then use that token to access the protected endpoint.
+## Part 6: Step-by-Step Postman Testing for the Standalone Example
 
 ### Step 1: Generate a Token Using `/auth/login`
 
-1. Open Postman and click **New → HTTP Request**.  
-2. Set the method to **POST**.  
-3. Enter the URL:  
-   `http://localhost:8080/auth/login`  
-4. Click the **Body** tab, choose **raw**, and select **JSON**.  
+1. Open Postman and click **New → HTTP Request**.
+2. Set the method to **POST**.
+3. Enter the URL: `http://localhost:8080/auth/login`
+4. Click the **Body** tab, choose **raw**, and select **JSON**.
 5. Paste the following JSON:
 
 ```json
@@ -476,73 +430,50 @@ The goal here is to make the flow extremely clear. You will first get a token, t
 }
 ```
 
-6. Click **Send**.  
-7. If credentials are correct, you should get `200 OK` and a response that contains a `token` value. Copy the token.
+6. Click **Send**.
+7. You should get `200 OK` with a `token` in the response. Copy the token.
 
 ### Step 2: Call the Protected Endpoint Without Token (Expected Failure)
 
-1. Create a new request in Postman.  
-2. Set method to **GET**.  
-3. Enter the URL:  
-   `http://localhost:8080/api/hello`  
-4. Click **Send**.  
-5. You should receive `401 Unauthorized`. This is expected because you did not provide the token.
+1. Create a new **GET** request to: `http://localhost:8080/api/hello`
+2. Click **Send**.
+3. You should receive `401 Unauthorized` — expected, because no token was provided.
 
 ### Step 3: Call the Protected Endpoint With Token (Expected Success)
 
-1. Open the same request (GET `/api/hello`).  
-2. Click the **Headers** tab.  
-3. Add a new header:
+1. Open the same GET request.
+2. Click the **Headers** tab and add:
+   - Key: `Authorization`
+   - Value: `Bearer <paste-your-token-here>`
+3. Click **Send**.
+4. You should now receive `200 OK` and the success message.
 
-- Key: `Authorization`  
-- Value: `Bearer <paste-your-token-here>`
-
-For example:
-
-```
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-```
-
-4. Click **Send** again.  
-5. You should now receive `200 OK` and the success message from the controller.
-
-If this works, you have successfully implemented the complete JWT flow: login → token → protected endpoint access.
+If this works, you have successfully implemented the complete JWT flow: **login → token → protected endpoint access**.
 
 ---
 
-## Part 7: Applying JWT to Simple CRM (One or Two Simple Endpoints Only)
+## Part 7: Applying JWT to Simple CRM
 
-Now that you understand the JWT flow, you will apply the same idea to the `simple-crm` project. The reason we do it in this order is because CRM has more layers (controller/service/repository), and learning JWT inside CRM from the start is much harder for learners. At this point, you already understand the most important part: how the token is generated and how the server validates it for protected routes.
+Now that you understand the JWT flow, you will apply it to `simple-crm`. The reason we do it in this order is because CRM has more layers, and learning JWT inside CRM from the start is much harder. At this point you already understand the most important part — how the token is generated and validated.
 
 ### Step 1: Add JWT Dependencies and Properties to Simple CRM
 
-Copy the same JWT dependencies (`jjwt-*`) into the CRM’s `pom.xml` and add the same `jwt.secret` and `jwt.expiration-ms` settings into CRM’s `application.properties`. Keep the secret consistent within the CRM project so tokens can be verified.
+Copy the same `jjwt-*` dependencies into CRM's `pom.xml` and add the same `jwt.secret` and `jwt.expiration-ms` settings to CRM's `application.properties`.
 
 ### Step 2: Add Auth Endpoint in CRM
 
-Create an `AuthController` in the CRM project under a suitable package like `com.skillsunion.simplecrm.auth` (or similar). The endpoint should be:
+Create an `AuthController` under a suitable package (e.g. `auth`). The endpoint should be `POST /auth/login`. For training, use the same simple in-memory credential check so students can focus on the JWT flow.
 
-```
-POST /auth/login
-```
+### Step 3: Add JwtService and JwtAuthFilter in CRM
 
-For training, you can use an in-memory credential check first so students can focus on JWT flow. If your CRM already has a user system, you would validate against it, but we keep it simple at this stage.
-
-### Step 3: Add JWT Service and Filter in CRM
-
-Copy the `JwtService` and `JwtAuthFilter` into the CRM project. Ensure that packages and imports are updated to match CRM structure. The filter must run for protected routes and should not block the login endpoint.
+Copy `JwtService` and `JwtAuthFilter` into the CRM project. Update packages and imports to match the CRM structure.
 
 ### Step 4: Update CRM Security Configuration
 
-Update the CRM `SecurityConfig` so that:
-
-- `/auth/login` is permitted  
-- One or two simple CRM endpoints require authentication (for example, `GET /customers` and `GET /customers/{id}`)  
-- Endpoints involving JPA relationships must not be included in the demo  
-
-A beginner-friendly approach is to start by securing only `GET /customers` first, test it, and then secure `GET /customers/{id}` next.
-
-Example configuration (adjust as needed for your CRM routes):
+Update `SecurityConfig` so that:
+- `/auth/login` is permitted
+- One or two simple CRM endpoints require authentication (start with `GET /customers`, test it, then add `GET /customers/{id}`)
+- Endpoints involving JPA relationships should not be included in the demo initially
 
 ```java
 .authorizeHttpRequests(auth -> auth
@@ -557,64 +488,39 @@ Example configuration (adjust as needed for your CRM routes):
 
 ## Part 8: Step-by-Step Postman Testing for Simple CRM
 
-The CRM testing flow is the same as the standalone example, but now you are calling CRM endpoints.
-
 ### Step 1: Get Token
-
-1. In Postman, send a **POST** request to:  
-   `http://localhost:8080/auth/login`  
-2. Use the same JSON credentials that your CRM login endpoint expects.  
-3. Copy the token from the response.
+Send a **POST** to `http://localhost:8080/auth/login` with your CRM credentials. Copy the token.
 
 ### Step 2: Call CRM Endpoint Without Token (Expected Failure)
-
-1. Create a **GET** request to:  
-   `http://localhost:8080/customers`  
-2. Click **Send**.  
-3. You should get `401 Unauthorized` because it is now protected.
+Send a **GET** to `http://localhost:8080/customers`. You should get `401 Unauthorized`.
 
 ### Step 3: Call CRM Endpoint With Token (Expected Success)
-
-1. Add the header:  
-   `Authorization: Bearer <your-token>`  
-2. Click **Send** again.  
-3. You should now receive `200 OK` and the CRM response (list of customers).
+Add the header `Authorization: Bearer <your-token>` and send again. You should now get `200 OK` with the customer list.
 
 ---
 
+## 🧑‍💻 Activity **(20 minutes)**
 
-## Hands-On Activity
+Independently practise the full JWT flow with the Simple CRM application.
 
-In this activity, **you will independently practise using JWT tokens** with the Simple CRM application. The goal is to reinforce the full JWT flow by executing each step yourself, from token generation to accessing protected endpoints.
+1. Start your Simple CRM application and verify it is running.
+2. Use Postman to send a **POST** to `/auth/login` and generate a JWT token.
+3. Copy the token from the response.
+4. Send a **GET** to `/customers` **without** the `Authorization` header — confirm you get `401 Unauthorized`.
+5. Add the header `Authorization: Bearer <your-token>` and send again — confirm `200 OK`.
+6. Repeat the same steps for **one additional endpoint** (e.g. `GET /customers/{id}`).
 
-### Your Task
-
-1. Start your Simple CRM application and ensure it is running successfully.
-2. Use Postman to send a **POST** request to the CRM login endpoint:
-   ```
-   POST /auth/login
-   ```
-   Provide the required username and password in the request body and generate your own JWT token.
-3. Copy the JWT token from the response.
-4. Create a **GET** request for a simple protected CRM endpoint, such as:
-   ```
-   GET /customers
-   ```
-5. First, send the request **without** the `Authorization` header and observe the `401 Unauthorized` response.
-6. Next, add the following header to your request:
-   ```
-   Authorization: Bearer <your-jwt-token>
-   ```
-7. Send the request again and confirm that you now receive a successful response.
-8. Repeat the same steps for **one additional simple CRM endpoint** (for example, `GET /customers/{id}`), ensuring you use the JWT token correctly each time.
-
-As you complete this activity, focus on understanding the flow rather than memorising code. You should clearly see how generating a token once allows you to access protected endpoints until the token expires.
-
+Focus on understanding the flow rather than memorising code. The key insight is: **generate once, use until expiry**.
 
 ---
 
 ## Key Takeaways
 
-JWT allows REST APIs to remain stateless while still authenticating users reliably. The critical implementation idea is that the server issues a signed token during login, and then the server validates that token for every protected request using a Spring Security filter. Once you understand the standalone example, applying JWT to a layered project like `simple-crm` becomes a repeatable process: add JWT generation, add JWT validation filter, update security rules, and test in Postman using the Bearer token header.
+- **JWT** allows REST APIs to remain stateless while still authenticating users reliably
+- The server issues a **signed token** during login and validates it on every protected request using a Spring Security filter
+- The **JWT filter** sets the authenticated user in Spring Security's `SecurityContext` — the controller never needs to know about JWT
+- Once you understand the standalone example, applying JWT to a layered project like `simple-crm` becomes a repeatable process: add JWT generation, add JWT validation filter, update security rules, test in Postman
 
 ---
+
+END
