@@ -26,6 +26,12 @@ You should already be comfortable with Spring Boot REST controllers, Spring Secu
 
 ---
 
+## 📖 Self Reading — Parts 1 to 4
+
+> These sections are covered in the slides during class. Read through them after the session to reinforce your understanding.
+
+---
+
 ## Part 1: Why JWT Instead of Basic Authentication?
 
 Basic authentication is useful for learning because it is simple, but it is not a great fit for modern REST APIs. In basic auth, the client sends the username and password on every request, which is not ideal. JWT is a common alternative because the client sends credentials once (during login), receives a signed token from the server, and then uses that token on subsequent requests. This keeps the server **stateless** (no session stored on the server) and makes the API easier to scale.
@@ -62,13 +68,17 @@ In this lesson, you will implement the following flow, step by step.
 
 ---
 
+> 📖 **End of Self Reading — Parts 1 to 4**
+
+---
+
 ## Part 5: Standalone JWT Example (Not Simple CRM Yet)
 
 We will start with a small, standalone example because it helps you learn the JWT flow without dealing with CRM code and database logic at the same time. Once you understand the flow, applying it to `simple-crm` becomes much easier.
 
 ### Step 1: Create a New Simple Spring Boot Project
 
-Create a fresh project named `jwt-demo` using Spring Initializr with **Spring Web** and **Spring Security** dependencies. Use the package name `com.example.jwtdemo`.
+Create a fresh project named `jwt-demo` using Spring Initializr with **Spring Web** and **Spring Security** dependencies. Use Spring Boot version **4.1.0** and package name `com.example.jwtdemo`.
 
 ### Step 2: Add Dependencies
 
@@ -77,16 +87,6 @@ Add the JWT library dependencies to `pom.xml`.
 > ⚠️ **Note:** We are using `jjwt` version `0.11.5` intentionally in this lesson because its API is clear and beginner-friendly. Version `0.12.x` introduced significant API changes (e.g. `Jwts.parser()` instead of `Jwts.parserBuilder()`, `.subject()` instead of `.setSubject()`). If you look up newer tutorials online, you may see different syntax — this is why.
 
 ```xml
-<dependency>
-  <groupId>org.springframework.boot</groupId>
-  <artifactId>spring-boot-starter-web</artifactId>
-</dependency>
-
-<dependency>
-  <groupId>org.springframework.boot</groupId>
-  <artifactId>spring-boot-starter-security</artifactId>
-</dependency>
-
 <dependency>
   <groupId>io.jsonwebtoken</groupId>
   <artifactId>jjwt-api</artifactId>
@@ -106,20 +106,40 @@ Add the JWT library dependencies to `pom.xml`.
 </dependency>
 ```
 
+> 📖 **Self Reading — What each dependency does:**
+> - `jjwt-api` — the core JWT library. Provides the API (interfaces and classes) you use in your code to build and parse tokens. This is the only jar your code compiles against.
+> - `jjwt-impl` — the runtime implementation of the JWT API. Marked `runtime` scope because your code never references it directly — it is loaded automatically when the application runs.
+> - `jjwt-jackson` — handles JSON serialisation and deserialisation of JWT claims using the Jackson library. Also `runtime` scope. Without this, the library cannot read or write the token payload.
+
 ### Step 3: Add JWT Settings in `application.properties`
 
 Add a secret key and expiry time.
 
-> ⚠️ **Note:** The JWT secret must be **at least 32 characters long**. If you use a shorter value (like `mysecret`), you will get a `WeakKeyException` at runtime. For training, we store it in `application.properties`. In real projects, secrets should be stored securely using environment variables or a secrets manager (e.g. AWS Secrets Manager, HashiCorp Vault).
+> ⚠️ **Note:** The JWT secret must be **at least 32 characters long**. If you use a shorter value (like `mysecret`), you will get a `WeakKeyException` at runtime. For training, we store it in `application.properties`. In real projects, secrets must be stored securely — never in source code.
 
 ```properties
 jwt.secret=replace-this-with-a-long-random-secret-key-for-training-only
 jwt.expiration-ms=3600000
 ```
 
+> ⚠️ **Note:** VS Code will show a yellow warning on `jwt.secret` and `jwt.expiration-ms` saying they are unknown properties. This is harmless — the VS Code Spring Boot extension only recognises built-in Spring properties. Custom properties you define yourself will always show this warning. Spring Boot resolves them correctly at runtime via `@Value`.
+
+> ⚠️ **Note:** The property name `jwt.expiration-ms` uses a **hyphen** between `expiration` and `ms`. Your `@Value` annotation in `JwtService` must match exactly: `@Value("${jwt.expiration-ms}")`. Using a dot instead of a hyphen (`jwt.expiration.ms`) is a common mistake that causes a `PlaceholderResolutionException` startup error.
+
+> 📖 **Self Reading — Secret keys in real projects:**
+> In production, the JWT secret is never stored in `application.properties` because that file is committed to version control (Git), making the secret publicly visible. Instead, the real-world approach is:
+>
+> - **Generate** the secret using OpenSSL in the terminal: `openssl rand -base64 32`. This is the standard tool used by most backend developers — it is built into Linux and Mac and available on Windows via Git Bash. Never invent a secret by hand or use an online generator, as the value may pass through a third-party server.
+> - **Store** the secret in an environment variable on the server (e.g. `JWT_SECRET=...`) or in a cloud Secrets Manager such as AWS Secrets Manager, Azure Key Vault, or GCP Secret Manager. These are purpose-built secure vaults — not databases — with encryption, access controls, and audit logs.
+> - **Reference** it in `application.properties` as `jwt.secret=${JWT_SECRET}` so Spring injects it at runtime from the environment.
+> - The secret is **never** stored in a database. The database holds application data (customers, users, orders). The secret key is server configuration — it belongs to the infrastructure layer, not the data layer. Mixing them creates a security risk and a chicken-and-egg startup problem.
+
 ### Step 4: Create DTOs for Login Requests and Token Responses
 
 Create a `dto` package (`com.example.jwtdemo.dto`) and add these two classes.
+
+> 📖 **Self Reading — What these DTOs are for:**
+> `LoginRequest` captures the username and password sent by the client in the HTTP request body when calling `/auth/login`. `TokenResponse` wraps the generated JWT token so it is returned to the client as a clean, structured JSON response. Using DTOs here rather than raw strings keeps the API contract explicit — if you need to add fields later (such as token type or expiry time), you extend the DTO without changing the controller signature. This is standard practice in production Spring Boot APIs.
 
 > 📖 **Note:** These DTOs are written as plain Java classes with manual getters and setters so the standalone demo is self-contained and easy to read. In a project that already uses Lombok (like `simple-crm`), you would replace the boilerplate with `@Data` and `@AllArgsConstructor`.
 
@@ -207,6 +227,8 @@ public class JwtService {
     }
 
     public String extractUsername(String token) {
+        // parseClaimsJws validates the signature first, then decodes the payload.
+        // If the token was tampered with, it throws an exception before reaching getSubject().
         Claims claims = Jwts.parserBuilder()
                 .setSigningKey(getSigningKey())
                 .build()
@@ -235,9 +257,9 @@ public class JwtService {
 
 ### Step 6: Create the Auth Controller
 
-Create `AuthController` in the root package `com.example.jwtdemo`. This endpoint accepts credentials and returns a JWT token. It delegates credential validation to Spring Security's `AuthenticationManager` — this is the standard industry pattern. If authentication succeeds, we generate and return a token. If it fails, Spring throws `BadCredentialsException` and we return `401 Unauthorized`.
+Create `AuthController` in the root package `com.example.jwtdemo`. This endpoint accepts credentials and returns a JWT token. It delegates credential validation to Spring Security's `AuthenticationManager` — this is the standard industry pattern.
 
-> ℹ️ **Why `AuthenticationManager` and not a manual string check?** Because `AuthenticationManager` is Spring Security's single entry point for authentication — it uses your configured `UserDetailsService` and `PasswordEncoder`. Wiring through it means your login endpoint stays consistent with the rest of Spring Security regardless of how users are stored (in-memory, database, LDAP). This is the pattern you will see in every production Spring Boot app.
+> ℹ️ **Why `AuthenticationManager` and not a manual string check?** `AuthenticationManager` is Spring Security's single entry point for authentication — it uses your configured `UserDetailsService` and `PasswordEncoder`. Wiring through it means your login endpoint stays consistent with the rest of Spring Security regardless of how users are stored (in-memory, database, LDAP). This is the pattern you will see in every production Spring Boot application.
 
 ```java
 package com.example.jwtdemo;
@@ -285,11 +307,11 @@ public class AuthController {
 
 ### Step 7: Create a Simple Protected Endpoint
 
-Create `HelloController` in the root package `com.example.jwtdemo`. This endpoint will be protected by JWT. Once JWT security is working, calling it without a token should return `401 Unauthorized`, and calling it with a valid token should return `200 OK`.
+Create `HelloController` in the root package `com.example.jwtdemo`. This endpoint is a placeholder used only to verify that JWT protection is working. Once JWT security is working, calling it without a token should return `401 Unauthorized`, and calling it with a valid token should return `200 OK`.
 
-It is important to notice that the controller itself does not contain any JWT code. In Spring Security, endpoints are protected by the **security configuration** and the **filter chain** — not by annotations on the controller. So even though this looks like a normal controller, it becomes protected because:
+The controller itself contains no JWT code. In Spring Security, endpoints are protected by the **security configuration** and the **filter chain** — not by annotations on the controller. This endpoint becomes protected because:
 1. The request passes through the JWT filter first, and
-2. The `SecurityConfig` marks `/api/**` as authenticated.
+2. `SecurityConfig` marks `/api/**` as authenticated.
 
 ```java
 package com.example.jwtdemo;
@@ -309,7 +331,7 @@ public class HelloController {
 
 ### Step 8: Create the JWT Authentication Filter
 
-Create `JwtAuthFilter` in the root package `com.example.jwtdemo`. This filter intercepts incoming requests and validates the JWT before the request reaches the controller. Many students find this part overwhelming at first — focus on the **purpose** rather than memorising every line. It is also perfectly acceptable to copy and paste this filter code; it is standard boilerplate used across real Spring Boot applications.
+Create `JwtAuthFilter` in the root package `com.example.jwtdemo`. This filter intercepts incoming requests and validates the JWT before the request reaches the controller. Focus on the **purpose** rather than memorising every line — this is standard boilerplate used across real Spring Boot applications and it is perfectly acceptable to copy and paste it.
 
 **Mental model of what the filter does:**
 
@@ -384,17 +406,13 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 }
 ```
 
-### Step 9: Configure Spring Security
+### Step 9: Create `AppConfig` to Expose `AuthenticationManager`
 
-Create `SecurityConfig` in the root package `com.example.jwtdemo`. This configuration wires everything together: it defines who the users are, how passwords are encoded, exposes the `AuthenticationManager` for use in `AuthController`, and registers the JWT filter.
+Create `AppConfig.java` in the root package `com.example.jwtdemo`. This class exposes the `AuthenticationManager` bean so that `AuthController` can inject it.
 
-> ℹ️ **Note on `@EnableWebSecurity`:** This annotation is a holdover from plain Spring (non-Boot) applications. In Spring Boot, the `SecurityFilterChain` bean is picked up automatically — `@EnableWebSecurity` is not needed. It is included here for awareness since you may encounter it in older codebases and online tutorials, but modern Spring Boot projects omit it.
+> ⚠️ **Why a separate class?** The `AuthenticationManager` bean must **not** be defined inside `SecurityConfig`. If you put it there, Spring creates a circular dependency: `AuthController` needs `AuthenticationManager` → `AuthenticationManager` is built by `SecurityConfig` → `SecurityConfig` gets auto-wired with `AuthController` → cycle. Keeping it in a separate `AppConfig` breaks the cycle cleanly.
 
-Key rules applied here:
-- `/auth/login` is public — users must be able to log in before they have a token
-- `/api/**` requires authentication — all routes under `/api/` are protected
-- `SessionCreationPolicy.STATELESS` — no server-side sessions; every request must carry the token
-- JWT filter runs **before** `UsernamePasswordAuthenticationFilter` so authentication is resolved early
+> ⚠️ **Copilot warning:** GitHub Copilot may auto-inject `AuthController` into `SecurityConfig`'s constructor. If you see `AuthController` appear as a constructor parameter in `SecurityConfig`, remove it immediately — `SecurityConfig` only needs `JwtAuthFilter`.
 
 ```java
 package com.example.jwtdemo;
@@ -403,6 +421,36 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+
+@Configuration
+public class AppConfig {
+
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
+        return config.getAuthenticationManager();
+    }
+}
+```
+
+### Step 10: Configure Spring Security
+
+Create `SecurityConfig` in the root package `com.example.jwtdemo`. This configuration wires everything together: defines who the users are, how passwords are encoded, and registers the JWT filter.
+
+> ℹ️ **Note on `@EnableWebSecurity`:** This annotation is a holdover from plain Spring (non-Boot) applications. In Spring Boot, the `SecurityFilterChain` bean is picked up automatically — `@EnableWebSecurity` is not needed. You may encounter it in older codebases and online tutorials, but modern Spring Boot projects omit it.
+
+> ⚠️ **Constructor rule:** `SecurityConfig` must only inject `JwtAuthFilter` in its constructor — nothing else. If Copilot adds any other parameter, remove it.
+
+Key rules applied here:
+- `/auth/login` is public — users must be able to log in before they have a token
+- `/api/**` requires authentication
+- `SessionCreationPolicy.STATELESS` — no server-side sessions; every request must carry the token
+- JWT filter runs **before** `UsernamePasswordAuthenticationFilter`
+
+```java
+package com.example.jwtdemo;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.User;
@@ -419,6 +467,8 @@ public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
 
+    // Only JwtAuthFilter is injected here.
+    // Do NOT add AuthController or AuthenticationManager — that causes a circular dependency.
     public SecurityConfig(JwtAuthFilter jwtAuthFilter) {
         this.jwtAuthFilter = jwtAuthFilter;
     }
@@ -438,12 +488,6 @@ public class SecurityConfig {
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
-    }
-
-    // Expose AuthenticationManager so AuthController can use it for login.
-    @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
-        return config.getAuthenticationManager();
     }
 
     @Bean
@@ -511,17 +555,21 @@ public class SecurityConfig {
 3. Click **Send**.
 4. You should now receive `200 OK` and the success message.
 
+> ⚠️ **Postman Bearer Token warning:** Postman has two ways to attach a token. If you use the **Authorization tab** and select "Bearer Token", paste **only the raw token** — no `Bearer` prefix. Postman adds the word `Bearer` automatically. If you type `Bearer eyJ...` in that field, Postman sends `Bearer Bearer eyJ...` as the header value, which the filter rejects with `403 Forbidden`. To avoid confusion, always use the **Headers tab** for class — add `Authorization` as the key and `Bearer <token>` as the value. This is explicit, unambiguous, and shows exactly what is sent over HTTP.
+
 If this works, you have successfully implemented the complete JWT flow: **login → token → protected endpoint access**.
 
 ---
 
 ## Part 7: Applying JWT to Simple CRM
 
-Now that you understand the JWT flow, you will apply it to `simple-crm`. The reason we do it in this order is because CRM has more layers, and learning JWT inside CRM from the start is much harder. At this point you already understand the most important part — how the token is generated and validated.
+Now that you understand the JWT flow, you will apply it to `simple-crm`. At this point you already understand the most important part — how the token is generated and validated. The steps below mirror exactly what you did in the standalone demo.
 
 ### Step 1: Add JWT Dependencies and Properties to Simple CRM
 
 Copy the same `jjwt-*` dependencies into CRM's `pom.xml` and add the same `jwt.secret` and `jwt.expiration-ms` settings to CRM's `application.properties`.
+
+Also comment out or remove the old `spring.security.user.name` and `spring.security.user.password` properties if present — the `UserDetailsService` bean in `SecurityConfig` now handles the user.
 
 ### Step 2: Create the `auth` and `security` Packages
 
@@ -529,15 +577,21 @@ In the CRM project, create two new packages:
 - `com.ntu.sg.simple_crm.auth` — for `AuthController` and DTOs
 - `com.ntu.sg.simple_crm.security` — for `JwtService` and `JwtAuthFilter`
 
-### Step 3: Copy and Update `JwtService`, `JwtAuthFilter`, and DTOs
+### Step 3: Copy `JwtService.java` into the `security` Package
 
-Copy `JwtService` and `JwtAuthFilter` from the standalone demo into the `security` package. Copy `LoginRequest` and `TokenResponse` into the `auth` package. Update all `package` declarations to match.
+Copy `JwtService` from the standalone demo into the `security` package. Update the package declaration to `com.ntu.sg.simple_crm.security`. Everything else stays the same.
 
-> ℹ️ Since `simple-crm` already uses Lombok, you may replace the manual getters/setters in `LoginRequest` and `TokenResponse` with `@Data` and `@AllArgsConstructor`.
+### Step 4: Copy `JwtAuthFilter.java` into the `security` Package
 
-### Step 4: Add `AuthController` to the `auth` Package
+Copy `JwtAuthFilter` into the `security` package. Update the package declaration. Update the import for `JwtService` to `com.ntu.sg.simple_crm.security.JwtService`.
 
-Create `AuthController` in `com.ntu.sg.simple_crm.auth`. The implementation is identical to the standalone demo — same `AuthenticationManager` pattern, same `/auth/login` endpoint.
+### Step 5: Copy DTOs into the `auth` Package
+
+Copy `LoginRequest` and `TokenResponse` into the `auth` package. Update package declarations to `com.ntu.sg.simple_crm.auth`.
+
+> ℹ️ Since `simple-crm` already uses Lombok, you may replace the manual getters/setters with `@Data` and `@AllArgsConstructor`.
+
+### Step 6: Add `AuthController` to the `auth` Package
 
 ```java
 package com.ntu.sg.simple_crm.auth;
@@ -577,9 +631,27 @@ public class AuthController {
 }
 ```
 
-### Step 5: Update CRM `SecurityConfig`
+### Step 7: Create `AppConfig.java` in `com.ntu.sg.simple_crm.config`
 
-Replace the contents of `SecurityConfig` in `com.ntu.sg.simple_crm.config` with the following. This keeps the same in-memory user for now and adds JWT support.
+```java
+package com.ntu.sg.simple_crm.config;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+
+@Configuration
+public class AppConfig {
+
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
+        return config.getAuthenticationManager();
+    }
+}
+```
+
+### Step 8: Replace `SecurityConfig.java` in `com.ntu.sg.simple_crm.config`
 
 ```java
 package com.ntu.sg.simple_crm.config;
@@ -587,8 +659,6 @@ package com.ntu.sg.simple_crm.config;
 import com.ntu.sg.simple_crm.security.JwtAuthFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.User;
@@ -624,13 +694,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
-        return config.getAuthenticationManager();
-    }
-
-    @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-
         http
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -652,13 +716,20 @@ public class SecurityConfig {
 ## Part 8: Step-by-Step Postman Testing for Simple CRM
 
 ### Step 1: Get Token
-Send a **POST** to `http://localhost:8080/auth/login` with your CRM credentials. Copy the token.
+Send a **POST** to `http://localhost:8080/auth/login` with:
+```json
+{
+  "username": "user",
+  "password": "password"
+}
+```
+Copy the token from the response.
 
 ### Step 2: Call CRM Endpoint Without Token (Expected Failure)
 Send a **GET** to `http://localhost:8080/customers`. You should get `401 Unauthorized`.
 
 ### Step 3: Call CRM Endpoint With Token (Expected Success)
-Add the header `Authorization: Bearer <your-token>` and send again. You should now get `200 OK` with the customer list.
+In the **Headers** tab add `Authorization: Bearer <your-token>` and send again. You should now get `200 OK` with the customer list.
 
 ---
 
@@ -683,7 +754,9 @@ Focus on understanding the flow rather than memorising code. The key insight is:
 - The server issues a **signed token** during login and validates it on every protected request using a Spring Security filter
 - The **JWT filter** sets the authenticated user in Spring Security's `SecurityContext` — the controller never needs to know about JWT
 - `AuthenticationManager` is Spring Security's single entry point for credential validation — always wire through it, never check credentials manually
-- Once you understand the standalone example, applying JWT to a layered project like `simple-crm` becomes a repeatable process: add JWT generation, add JWT validation filter, update security rules, test in Postman
+- The `AuthenticationManager` bean must live in a separate `AppConfig` class — keeping it in `SecurityConfig` causes a circular dependency
+- `SecurityConfig` constructor must only inject `JwtAuthFilter` — watch for Copilot auto-injecting other beans
+- Once you understand the standalone example, applying JWT to a layered project like `simple-crm` is a repeatable process: add dependencies → copy JWT classes → update packages → replace `SecurityConfig` → test in Postman
 
 ---
 
