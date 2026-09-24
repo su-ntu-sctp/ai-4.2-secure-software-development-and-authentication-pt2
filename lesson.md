@@ -122,6 +122,9 @@ Add the JWT library dependencies to `pom.xml`, inside `<dependencies>`.
 
 Add a secret key and expiry time at the end of `application.properties`.
 
+> 📖 **What is the JWT secret and why do we need it?**
+> The JWT secret is a password that only the server knows. `JwtService` uses it to **sign** every token it creates and to **check** every token that comes back. If someone creates a fake token or changes a real one, the signature won't match the secret, and the request is rejected. The value used here is a placeholder sentence for training; any text longer than 32 characters works.
+
 > ⚠️ **Note:** The JWT secret must be **at least 32 characters long**. If you use a shorter value (like `mysecret`), you will get a `WeakKeyException` at runtime. For training, we store it in `application.properties`. In real projects, secrets must be stored securely — never in source code.
 
 ```properties
@@ -202,6 +205,8 @@ public class TokenResponse {
 }
 ```
 
+> ⚠️ **The JSON key must match the field name exactly.** Postman sends `"username"`, so the field must be `username` (all lowercase). If you type `userName` with a capital N, Spring cannot match it, the username arrives empty, and login fails with `401 Unauthorized` even though the password is correct. This is a very common mistake.
+
 ### Step 5: Create `JwtService` to Generate and Validate Tokens
 
 Create this class in the `security` package. It is responsible for creating and validating JWTs. Notice that we are adding the username as the token's subject and adding an expiration timestamp.
@@ -232,8 +237,7 @@ public class JwtService {
     private long jwtExpirationMs;
 
     private Key getSigningKey() {
-        // For HS256, we use a shared secret key.
-        // The secret must be at least 32 characters long.
+        // Converts the secret text into a key used to sign and check tokens
         return Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
     }
 
@@ -277,6 +281,23 @@ public class JwtService {
     }
 }
 ```
+
+> 📖 **What each part of `JwtService` does:**
+>
+> 1. **The two settings (`@Value`):** read `jwt.secret` and `jwt.expiration-ms` from `application.properties`.
+> 2. **`getSigningKey()`:** turns the secret text into a key that the JWT library can use. The other methods call it when they need to sign or check a token.
+> 3. **`generateToken(username)`:** creates a new token.
+>    - `setSubject(username)` puts the username inside the token.
+>    - `setIssuedAt(now)` records when the token was created.
+>    - `setExpiration(expiry)` records when the token expires (1 hour later).
+>    - `signWith(...)` signs the token with the secret key.
+>    - `compact()` turns it into the final token string.
+>
+>    Called by `AuthController` when the user logs in.
+> 4. **`isTokenValid(token)`:** checks a token. It opens the token using the secret key. If the signature is wrong or the token has expired, it returns **false**; otherwise it returns **true**. Called by `JwtAuthFilter` on every request.
+> 5. **`extractUsername(token)`:** opens the token and returns the username inside it. Called by `JwtAuthFilter` after the token is confirmed valid.
+>
+> **In one line:** `JwtService` does three jobs: it creates tokens, checks tokens, and reads the username from tokens.
 
 ### Step 6: Create the JWT Authentication Filter
 
@@ -355,6 +376,19 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 }
 ```
 
+> 📖 **What each part of `JwtAuthFilter` does:**
+>
+> 1. **`@Component` and `extends OncePerRequestFilter`:** `@Component` tells Spring to create this filter automatically. `OncePerRequestFilter` means it runs **once for every request** that comes into the app.
+> 2. **The constructor:** the filter needs `JwtService` to check tokens, so Spring passes it in here.
+> 3. **`doFilterInternal()`:** the main method, which runs on every request.
+>    - **Read the header:** `request.getHeader(...)` gets the `Authorization` header.
+>    - **No token? Let it pass:** if the header is missing or doesn't start with `Bearer `, the filter does nothing and passes the request on. `SecurityConfig` decides later whether to block it.
+>    - **Take out the token:** `substring(...)` removes the word `Bearer ` so only the token is left.
+>    - **Check the token and mark the user as logged in:** it asks `JwtService` whether the token is valid. If it is, it gets the username, creates an "authenticated" object for that user (`Collections.emptyList()` means no roles for now), and saves it in the **`SecurityContext`**. This is how Spring knows "this user is logged in" for this request.
+>    - **Continue:** the last line, `filterChain.doFilter(...)`, passes the request on to the next step and eventually to the controller.
+>
+> **In one line:** the filter checks every request; if it has a valid token, the user is marked as logged in.
+
 ### Step 7: Create `AppConfig` to Expose `AuthenticationManager`
 
 Create `AppConfig.java` in the existing `config` package. This class exposes the `AuthenticationManager` bean so that `AuthController` can inject it.
@@ -378,6 +412,11 @@ public class AppConfig {
     }
 }
 ```
+
+> 📖 **Why do we need `AppConfig`?**
+> `AuthController` needs the **`AuthenticationManager`** to check the username and password at login. Spring Security builds the `AuthenticationManager` on its own, but it doesn't make it available for other classes to use. `AppConfig` has one job: it **makes the `AuthenticationManager` available** so `AuthController` can use it. The `AuthenticationManager` then checks the login using the users and the password encoder from `SecurityConfig`.
+>
+> **In one line:** `AppConfig` gives `AuthController` the tool it needs to check the username and password.
 
 ### Step 8: Create the Auth Controller
 
@@ -432,6 +471,15 @@ public class AuthController {
 }
 ```
 
+> 📖 **What `AuthController` does, in order:**
+> 1. The user sends a username and password to `POST /auth/login`. Spring puts them into a `LoginRequest`.
+> 2. `authenticationManager.authenticate(...)` checks whether the username and password are correct, using the users in `SecurityConfig`.
+> 3. **If they're wrong**, it throws `BadCredentialsException`, and the `catch` block returns **401 Unauthorized**.
+> 4. **If they're correct**, `jwtService.generateToken(username)` creates the token.
+> 5. The token is put into a `TokenResponse` and returned with **200 OK**.
+>
+> **In one line:** `AuthController` checks the login, and if it's correct, gives back a token.
+
 ### Step 9: Update `SecurityConfig`
 
 Open the existing `SecurityConfig.java` in the `config` package and replace its contents with the version below.
@@ -444,6 +492,8 @@ Open the existing `SecurityConfig.java` in the `config` package and replace its 
 - The JWT filter is registered before `UsernamePasswordAuthenticationFilter`
 
 **What stays the same:** the `passwordEncoder()` bean and the three in-memory users (`user`, `admin`, `manager`) are unchanged. All three can log in via `/auth/login`.
+
+> ℹ️ **Imports:** after the edit, the `HttpMethod` and `Customizer` imports from Lesson 4.1 are no longer used. Delete them. They cause no errors, but VS Code will flag them as unused.
 
 > ℹ️ **Where did the roles go?** Our token only carries the username, and the filter sets empty authorities. If we kept the 4.1 rules like `hasRole("ADMIN")`, every request would be rejected with `403`, even with a valid token. So for this lesson, any logged-in user can access all `/customers` endpoints. Carrying roles inside the JWT is a later step.
 
@@ -591,30 +641,6 @@ Restart the application and confirm it starts without errors.
 > ⚠️ **Postman Bearer Token warning:** Postman has two ways to attach a token. If you use the **Authorization tab** and select "Bearer Token", paste **only the raw token** — no `Bearer` prefix. Postman adds the word `Bearer` automatically. If you type `Bearer eyJ...` in that field, Postman sends `Bearer Bearer eyJ...`, the token is rejected, and you get `403 Forbidden`. To avoid confusion, always use the **Headers tab** for class — add `Authorization` as the key and `Bearer <token>` as the value. This is explicit, unambiguous, and shows exactly what is sent over HTTP.
 
 If this works, you have successfully implemented the complete JWT flow: **login → token → protected endpoint access**.
-
----
-
-## 🧑‍💻 Activity **(20 minutes)**
-
-Independently practise the full JWT flow with the Simple CRM application.
-
-1. Send a **POST** to `/auth/login` with a **wrong password** — confirm you get `401 Unauthorized`.
-2. Log in as `admin` / `admin123` and copy the token.
-3. Send a **GET** to `/customers/1` **without** the `Authorization` header — confirm `403 Forbidden`.
-4. Add the header `Authorization: Bearer <your-token>` and send again — confirm `200 OK`.
-5. Using the same token, send a **POST** to `/customers` with this body and confirm the customer is created:
-
-```json
-{
-  "firstName": "Clint",
-  "lastName": "Barton",
-  "email": "clint@avengers.com"
-}
-```
-
-6. Change one character in the token and send the GET again — confirm the request is rejected with `403`. This shows the signature protecting the token from tampering.
-
-Focus on understanding the flow rather than memorising code. The key insight is: **generate once, use until expiry**.
 
 ---
 
