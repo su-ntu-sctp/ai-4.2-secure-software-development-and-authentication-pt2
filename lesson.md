@@ -214,7 +214,7 @@ public class TokenResponse {
 
 Create this class in the `security` package. It is responsible for creating and validating JWTs. Notice that we are adding the username as the token's subject and adding an expiration timestamp.
 
-> ⚠️ **Note:** You may see a deprecation warning on `SignatureAlgorithm.HS256` when using `jjwt 0.11.5`. This is expected and harmless — the code still works correctly. The warning exists because `0.12.x` replaced this with a different API.
+>
 
 ```java
 package sg.edu.ntu.simple_crm.security;
