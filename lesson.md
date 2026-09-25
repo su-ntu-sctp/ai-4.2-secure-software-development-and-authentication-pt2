@@ -144,8 +144,6 @@ jwt.expiration-ms=3600000
 > - **Reference** it in `application.properties` as `jwt.secret=${JWT_SECRET}` so Spring injects it at runtime from the environment.
 > - The secret is **never** stored in a database. The database holds application data (customers, users, orders). The secret key is server configuration — it belongs to the infrastructure layer, not the data layer. Mixing them creates a security risk and a chicken-and-egg startup problem.
 
-Here's a short paragraph you can add:
-
 > 📖 **How the secret key is used:**
 > When a token is created, `JwtService` uses the secret key together with the token's header and payload to calculate a **signature**, and adds that signature to the token. The secret key itself is never put inside the token. When a token comes back with a request, `JwtService` uses the same secret key to calculate the signature again from the token's header and payload, and compares it with the signature in the token. If they match, the token is real and unchanged. If they don't match, the token was changed or faked, and it is rejected.
 
