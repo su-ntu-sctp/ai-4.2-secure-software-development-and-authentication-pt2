@@ -115,8 +115,8 @@ Add the JWT library dependencies to `pom.xml`, inside `<dependencies>`.
 
 > 📖 **Self Reading — What each dependency does:**
 > - `jjwt-api` — the core JWT library. Provides the API (interfaces and classes) you use in your code to build and parse tokens. This is the only jar your code compiles against.
-> - `jjwt-impl` — the runtime implementation of the JWT API. Marked `runtime` scope because your code never references it directly — it is loaded automatically when the application runs.
-> - `jjwt-jackson` — handles JSON serialisation and deserialisation of JWT claims using the Jackson library. Also `runtime` scope. Without this, the library cannot read or write the token payload.
+> - `jjwt-impl` — the runtime implementation of the JWT API.
+> - `jjwt-jackson` — handles JSON serialisation and deserialisation of JWT claims using the Jackson library. 
 
 ### Step 2: Add JWT Settings in `application.properties`
 
